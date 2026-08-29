@@ -27,10 +27,16 @@ struct KeyCode {
 constexpr uint8_t MATRIX_KEYNUM[8][16] = {
     /* ROW0 */ {  0,  0,110, 45,115, 35, 36,116,   0,117, 41,  0, 99,104, 83, 60},
     /* ROW1 */ {  0, 44, 16, 30,114, 21, 22, 15, 118,  0, 28, 27, 92, 97,102,  0},
-    /* ROW2 */ { 58,  0,  1,112,113,  6,  7,120, 119,  0, 13, 12, 76, 75, 85, 80},
+    // ROW2 empirically confirmed shifted one column LEFT vs. the Figure 5
+    // reading (Insert and Delete both landed one column earlier than
+    // transcribed). Untested columns in this row may still be off.
+    /* ROW2 */ {  0,  1,112,113,  6,  7,120,119,   0, 13, 12, 76, 75, 85, 80,  0},
     /* ROW3 */ {  0,  2,  3,  4,  5,  8,121, 10,   9, 11,122,123, 86, 81,124,  0},
     /* ROW4 */ {  0, 17, 18, 19, 20, 23,  0, 25,  24, 26, 91, 96,101,106,125,  0},
-    /* ROW5 */ {  0, 31, 32, 33, 34, 37, 29, 39,  38, 40, 93, 98,103,108,  0,  0},
+    // ROW5 empirically confirmed shifted one column RIGHT vs. the Figure 5
+    // reading (A, S, and ';' all landed one column later than transcribed).
+    // Untested columns in this row may still be off.
+    /* ROW5 */ {  0,  0, 31, 32, 33, 34, 37, 29,  39, 38, 40, 93, 98,103,108,  0},
     /* ROW6 */ { 64, 57, 46, 47, 48, 49, 52, 43,  54, 53, 42, 90, 95,100,126,  0},
     /* ROW7 */ {  0,  0,  0,  0,  0, 50, 51, 61,   0,  0, 55, 84, 89,105, 79, 62},
 };
