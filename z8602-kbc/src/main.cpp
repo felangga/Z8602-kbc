@@ -24,6 +24,12 @@ static void sendKeyEvent(uint8_t keyNum, bool pressed) {
     KeyCode kc = SCANCODE2[keyNum];
     if (kc.code == 0x00) return; // unmapped in table — fill keytables.h
 
+    Serial.print(pressed ? F("key down: num=") : F("key up:   num="));
+    Serial.print(keyNum);
+    Serial.print(F(" code=0x"));
+    Serial.print(kc.code, HEX);
+    Serial.println(kc.isExtended ? F(" (extended)") : F(""));
+
     if (pressed) {
         if (kc.isExtended) keyboard.keyboard_press_special(kc.code);
         else keyboard.keyboard_press(kc.code);
@@ -36,6 +42,9 @@ static void sendKeyEvent(uint8_t keyNum, bool pressed) {
 }
 
 void setup() {
+    Serial.begin(115200);
+    Serial.println(F("z8602-kbc: starting up"));
+
     pinMode(LED_SCROLL_PIN, OUTPUT);
     pinMode(LED_NUM_PIN, OUTPUT);
     pinMode(LED_CAPS_PIN, OUTPUT);
@@ -46,6 +55,8 @@ void setup() {
 
     delay(500);       // let host settle after power-up
     keyboard.write(0xAA); // BAT-pass code, standard PS/2 power-on self-test result
+
+    Serial.println(F("z8602-kbc: ready"));
 }
 
 static uint8_t lastSeenTypematicByte = 0;
