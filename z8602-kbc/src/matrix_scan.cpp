@@ -27,23 +27,6 @@ uint8_t matrixScan(KeyEvent *events) {
             uint8_t keyNum = MATRIX_KEYNUM[r][c];
             bool pressed = (digitalRead(ROW_PINS[r]) == LOW);
 
-            // TEMP DEBUG: raw (pre-debounce) read of every mapped matrix
-            // cell, printed on change only, regardless of whether the scan
-            // codes for that key are filled in yet. Remove once wiring is
-            // confirmed working.
-            static bool lastRawCell[8][16] = {false};
-            if (keyNum != 0 && pressed != lastRawCell[r][c]) {
-                lastRawCell[r][c] = pressed;
-                Serial.print(F("COL"));
-                Serial.print(c);
-                Serial.print(F("/ROW"));
-                Serial.print(r);
-                Serial.print(F(" (key "));
-                Serial.print(keyNum);
-                Serial.print(F("): "));
-                Serial.println(pressed ? F("LOW (pressed)") : F("HIGH (released)"));
-            }
-
             if (keyNum == 0) continue; // phantom / unpopulated matrix cell
             if (pressed) {
                 rawState[keyNum] = true;

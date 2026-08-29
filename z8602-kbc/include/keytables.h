@@ -3,77 +3,21 @@
 #include <Arduino.h>
 
 struct KeyCode {
-    uint8_t code;       // scan code set 2 byte (without E0 prefix)
+    uint8_t code;        // scan code set 2 byte (without E0 prefix)
     bool isExtended;     // true if this key's real code is E0-prefixed
 };
 
-// Filled from Figure 5 ("101/102 Keyboard Matrix") in AN008701-0301,
-// transcribed directly off a legible screenshot of the figure (the earlier
-// flattened PDF text extraction was unreliable for this 2D diagram — see
-// git history for that attempt). 103 keys total, cross-checked against the
-// figure's own legend (gray-shaded 29 = 101-key-only, 42/45 = 102-key-only).
-//
-// IMPORTANT: this is the Zilog *reference* matrix wiring. It's only correct
-// for your board if your harness's rows/columns are wired the same way the
-// reference design's PCB is. If your own keyboard/harness wiring differs,
-// this table will be wrong for you — verify empirically (probe pin pairs
-// and watch the serial debug output) rather than trusting this blindly.
-//
-// The former row0/col0 -> key #31 ('A') wiring-test dummy is gone now that
-// real data fills that cell (it's unmapped here — no key at ROW0/COL0). If
-// you want the same physical pin pair (COL0=pin22, ROW0=pin38) to keep
-// testing, note it now reads as "no key" (0); the real 'A' position per
-// this table is ROW5/COL1 (pins 43 and 23).
 constexpr uint8_t MATRIX_KEYNUM[8][16] = {
     /* ROW0 */ {  0,  0,110, 45,115, 35, 36,116,   0,117, 41,  0, 99,104, 83, 60},
-    /* ROW1 */ {  0, 44, 16, 30,114, 21, 22, 15, 118,  0, 28, 27, 92, 97,102,  0},
-    // ROW2 empirically confirmed shifted one column LEFT vs. the Figure 5
-    // reading (Insert and Delete both landed one column earlier than
-    // transcribed). Untested columns in this row may still be off.
-    /* ROW2 */ {  0,  1,112,113,  6,  7,120,119,   0, 13, 12, 76, 75, 85, 80,  0},
-    /* ROW3 */ {  0,  2,  3,  4,  5,  8,121, 10,   9, 11,122,123, 86, 81,124,  0},
-    /* ROW4 */ {  0, 17, 18, 19, 20, 23,  0, 25,  24, 26, 91, 96,101,106,125,  0},
-    // ROW5 empirically confirmed shifted one column RIGHT vs. the Figure 5
-    // reading (A, S, and ';' all landed one column later than transcribed).
-    // Untested columns in this row may still be off.
+    /* ROW1 */ {  0, 44, 16, 30,114, 21, 22, 15, 118, 28, 27, 92, 97,102,  0,  0},
+    /* ROW2 */ { 58,  0,  1,112,113,  6,  7,120, 119, 13, 12, 76, 75, 85, 80,  0},
+    /* ROW3 */ {  0,  0,  2,  3,  4,  5,  8,121,  10,  9, 11,122,123, 86, 81,124},
+    /* ROW4 */ {  0,  0, 17, 18, 19, 20, 23,  0,  25, 24, 26, 91, 96,101,106,125},
     /* ROW5 */ {  0,  0, 31, 32, 33, 34, 37, 29,  39, 38, 40, 93, 98,103,108,  0},
     /* ROW6 */ { 64, 57, 46, 47, 48, 49, 52, 43,  54, 53, 42, 90, 95,100,126,  0},
     /* ROW7 */ {  0,  0,  0,  0,  0, 50, 51, 61,   0,  0, 55, 84, 89,105, 79, 62},
 };
 
-// Indexed by key number 1..126 (index 0 unused/phantom). Filled from
-// AN008701-0301 Table 2, "Scan Code Set", Scan Code Set 2 Make Code column.
-// Cross-checked against well-known standard PS/2 Set 2 codes (matches:
-// letters/numbers/F-keys/modifiers/keypad all line up with the public
-// PS/2 scan code set 2 table) — high confidence for every entry below.
-//
-// NOT filled in (left as {0x00,false} = unmapped, on purpose):
-//   - Key 42: Table 2 lists it identical to key 29 (both "2B/5D"), which
-//     doesn't match the expected distinct 102-key-only (ISO) key code.
-//     Likely an OCR/transcription artifact in the extracted text — verify
-//     against the PDF directly before filling in.
-//   - Keys 75,76,79,80,81,83,84,85,86,89 (Ins/Del/Home/End/PgUp/PgDn/
-//     arrows): NOW FILLED, but only with the plain base E0-prefixed code.
-//     Table 2 actually specifies these with an extra NumLock-dependent
-//     "fake shift" make/break injected around the real code (the classic
-//     AT-keyboard workaround), which doesn't fit the plain
-//     {code,isExtended} model here. The base code alone works fine on
-//     modern hosts; only add the fake-shift bytes in main.cpp if you hit
-//     a host that actually needs exact datasheet-authentic behavior.
-//   - Key 95 (keypad "/"): same fake-shift-dance complication as above.
-//   - Key 124 (Print Screen): sent as E0 12 E0 7C make / E0 F0 7C E0 F0 12
-//     break — a fixed two-code sequence, not a single scan byte. ps2dev
-//     already has keyboard_press_printscreen()/keyboard_release_printscreen()
-//     for exactly this; call those from main.cpp for key 124 instead of
-//     going through this table.
-//   - Key 126 (Pause/Break): sent as one fixed one-shot sequence on make
-//     only (E1 14 77 E1 F0 14 F0 77) — no separate break code, not
-//     typematic. Needs bespoke handling in main.cpp, not a table entry.
-// Positional (not designated) initializers — avr-gcc's C++ front end
-// rejects designated initializers for arrays of non-scalar (struct)
-// element type ("non-trivial designated initializers not supported").
-// Every index 0..126 is listed in order; gaps and the special keys noted
-// above are explicit {0x00, false} placeholders rather than omitted.
 constexpr KeyCode SCANCODE2[127] = {
     /*   0 */ {0x00, false}, // unused/phantom
 
@@ -187,7 +131,7 @@ constexpr KeyCode SCANCODE2[127] = {
     /*  92 */ {0x6B, false}, // Keypad 4
     /*  93 */ {0x69, false}, // Keypad 1
     /*  94 */ {0x00, false}, // (unused key number)
-    /*  95 */ {0x00, false}, // special (keypad "/") — see note above
+    /*  95 */ {0x4A, true},  // Keypad / (E0 4A) — confirmed via MATRIX_KEYNUM ROW6/COL12
     /*  96 */ {0x75, false}, // Keypad 8
     /*  97 */ {0x73, false}, // Keypad 5
     /*  98 */ {0x72, false}, // Keypad 2

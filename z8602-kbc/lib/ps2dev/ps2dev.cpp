@@ -490,7 +490,7 @@ int PS2dev::keyboard_pausebreak()
 		if (do_write(0xe1) == EABORT) continue;
 		if (do_write(0xf0) == EABORT) continue;
 		if (do_write(0x14) == EABORT) continue;
-		if (do_write(0xe0) == EABORT) continue;
+		if (do_write(0xf0) == EABORT) continue;
 		if (do_write(0x77) == EABORT) continue;
 		break;
 	} while (!handling_io_abort);
