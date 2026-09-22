@@ -53,40 +53,54 @@ static void sendKeyEvent(uint8_t keyNum, bool pressed) {
     }
 }
 
-// LED MOD 
+// LED MOD
 // KITT/Larson-scanner boot animation across Num/Caps/Scroll — bounces a
-// single lit LED back and forth a few times before settling to the real
-// lock-status LEDs once the host starts talking to us.
-static void startupLightShow() {
-    const uint8_t ledPins[3] = {LED_NUM_PIN, LED_CAPS_PIN, LED_SCROLL_PIN};
-    const uint8_t bounce[4] = {0, 1, 2, 1}; // num -> caps -> scroll -> caps -> (repeat)
-    constexpr unsigned long STEP_MS = 120;
-    constexpr uint8_t CYCLES = 3;
+// single lit LED back and forth before settling to the real lock-status LEDs
+// once the host starts talking to us.
+//
+// Non-blocking on purpose: as a 1.4s delay() loop it left nobody to answer the
+// host, which is exactly the window POST spends looking for the keyboard. It
+// now steps from loop() and yields the LEDs the moment the host claims them.
+static bool hostTookLeds = false;
+static uint8_t lightStep = 0;
+static unsigned long lightStepAt = 0;
 
-    for (uint8_t cycle = 0; cycle < CYCLES; cycle++) {
-        for (uint8_t step = 0; step < 4; step++) {
-            for (uint8_t p = 0; p < 3; p++) {
-                digitalWrite(ledPins[p], (p == bounce[step]) ? LOW : HIGH); // active-low
-            }
-            delay(STEP_MS);
-        }
+static void lightShowPoll() {
+    constexpr uint8_t STEPS = 12; // 3 cycles x 4 steps, as before
+    constexpr unsigned long STEP_MS = 120;
+    if (hostTookLeds || lightStep >= STEPS) return;
+    if (millis() - lightStepAt < STEP_MS) return;
+    lightStepAt = millis();
+
+    const uint8_t ledPins[3] = {LED_NUM_PIN, LED_CAPS_PIN, LED_SCROLL_PIN};
+    const uint8_t bounce[4] = {0, 1, 2, 1}; // num -> caps -> scroll -> caps
+    uint8_t lit = bounce[lightStep++ % 4];
+    for (uint8_t p = 0; p < 3; p++) {
+        digitalWrite(ledPins[p], (p == lit) ? LOW : HIGH); // active-low
     }
-    for (uint8_t p = 0; p < 3; p++) digitalWrite(ledPins[p], HIGH); // all off
+    if (lightStep >= STEPS) {
+        for (uint8_t p = 0; p < 3; p++) digitalWrite(ledPins[p], HIGH); // all off
+    }
 }
 
 void setup() {
+    // Answer the host before anything else. The 8042 only samples for the BAT
+    // completion code during a short power-on window, and everything that used
+    // to run ahead of this - LED init, a 1.4s blocking light show, a settling
+    // delay - was spending that window for us.
+    keyboard.keyboard_init(); // sends 0xAA
+
     pinMode(LED_SCROLL_PIN, OUTPUT);
     pinMode(LED_NUM_PIN, OUTPUT);
     pinMode(LED_CAPS_PIN, OUTPUT);
     applyLeds(0);
-
-    startupLightShow();
+    lightStepAt = millis();
 
     matrixInit();
-    keyboard.keyboard_init();
 
-    delay(500);       // let host settle after power-up
-    keyboard.write(0xAA); // BAT-pass code, standard PS/2 power-on self-test result
+    // No second 0xAA here: BAT is sent once, by keyboard_init() above. A
+    // duplicate BAT after the host has already locked on is a protocol
+    // violation, and some hosts answer it with a full keyboard reset.
 }
 
 static uint8_t lastSeenTypematicByte = 0;
@@ -96,6 +110,7 @@ void loop() {
     if (keyboard.available()) {
         // keyboard_handle() answers ED/EE/F0/F2/F3/F4/F5/F6/FE/FF per Table 4.
         keyboard.keyboard_handle(&leds);
+        hostTookLeds = true; // the host owns the LEDs from here on
         applyLeds(leds);
 
         // last_typematic_byte is a z8602-kbc patch to lib/ps2dev — upstream
@@ -105,6 +120,8 @@ void loop() {
             typematicSetFromByte(lastSeenTypematicByte);
         }
     }
+
+    lightShowPoll();
 
     unsigned long now = millis();
     if (now - lastScanAt >= SCAN_INTERVAL_MS) {

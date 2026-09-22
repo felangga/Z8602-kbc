@@ -29,6 +29,19 @@
 // Timeout if computer not sending for 30ms
 #define TIMEOUT 30
 
+// How long to wait for a byte's start bit once we have committed to reading
+// one. A byte takes ~1ms, so 5ms is generous - it only has to cover the gap
+// the host leaves between a command's ACK and the byte that follows it.
+#define READ_START_TIMEOUT_MS 5
+
+// Power-on: the host holds CLK low (inhibit) while it runs its own self-test
+// and only then starts sampling for 0xAA, so wait the inhibit out instead of
+// sleeping a fixed amount. Bounded, in case the line never comes back.
+#define BAT_INHIBIT_WAIT_MS 450
+
+// Budget for getting a response byte onto the wire before giving up.
+#define BAT_SEND_TIMEOUT_MS 400
+
 
 /*
  * the clock and data pins can be wired directly to the clk and data pins
@@ -262,7 +275,13 @@ int PS2dev::read(unsigned char * value)
 
 void PS2dev::keyboard_init()
 {
-  delay(200);
+  // BAT completion code (0xAA). Send it as early as the bus allows: the 8042
+  // samples for it inside a power-on window of roughly 500-750ms, so a fixed
+  // settling delay here can cost keyboard detection entirely.
+  unsigned long t0 = millis();
+  while (digitalRead(_ps2clk) == LOW && (millis() - t0) < BAT_INHIBIT_WAIT_MS) {
+    delay(1); // host is still inhibiting us - wait for it to let go
+  }
   write(0xAA);
   return;
 }
@@ -282,9 +301,15 @@ int PS2dev::keyboard_reply(unsigned char cmd, unsigned char *leds_)
   {
   case 0xFF: //reset
     ack();
-    //the while loop lets us wait for the host to be ready
-    while (write(0xFA)!=0) delay(1); //send ACK
-    while (write(0xAA) != 0) delay(1); // send BAT_SUCCESS
+    // Spec: ACK the reset, then send BAT_SUCCESS. ack() already sent the ACK -
+    // a second one desynced hosts that count response bytes. The retry is
+    // bounded so a host that stopped listening cannot hang the scan loop.
+    {
+      unsigned long t0 = millis();
+      while (write(0xAA) != ENOERR && (millis() - t0) < BAT_SEND_TIMEOUT_MS) {
+        delayMicroseconds(BYTE_INTERVAL_MICROS);
+      }
+    }
     break;
   case 0xFE: //resend
     ack();
