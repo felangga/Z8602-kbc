@@ -111,7 +111,12 @@ void loop() {
         // keyboard_handle() answers ED/EE/F0/F2/F3/F4/F5/F6/FE/FF per Table 4.
         keyboard.keyboard_handle(&leds);
         hostTookLeds = true; // the host owns the LEDs from here on
-        applyLeds(leds);
+        // Mirror the library's persistent LED byte, not the per-call
+        // out-parameter. `leds` is re-zeroed every pass, so anything that is
+        // not EDh left it at 0 and the old unconditional applyLeds() blanked
+        // Num/Caps/Scroll on every unrelated host command - POST sends F4h
+        // straight after EDh, so the LEDs lit and died in the same tick.
+        applyLeds(keyboard.getLeds());
 
         // last_typematic_byte is a z8602-kbc patch to lib/ps2dev — upstream
         // acks F3h (set typematic rate/delay) but drops the payload byte.

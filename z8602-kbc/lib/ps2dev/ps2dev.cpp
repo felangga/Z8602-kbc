@@ -188,11 +188,16 @@ int PS2dev::read(unsigned char * value)
   unsigned char calculated_parity = 1;
   unsigned char received_parity = 0;
 
-  //wait for data line to go low and clock line to go high (or timeout)
+  // Wait for the start bit: data low while clock is high.
+  // This used to bail with ECANCEL the moment both lines looked idle, which
+  // dropped every command *parameter* byte: the host releases the bus between
+  // the ACK of EDh/F3h/F0h and the byte that follows, so read() returned
+  // before the host had even begun sending it. That is why EDh was ACKed but
+  // the lock LEDs never lit. Wait for the byte instead - bounded, so a silent
+  // host cannot stall the scan loop.
   unsigned long waiting_since = millis();
   while((digitalRead(_ps2data) != LOW) || (digitalRead(_ps2clk) != HIGH)) {
-    if (!available()) return ECANCEL; /* Cancelled */
-    if((millis() - waiting_since) > TIMEOUT) return ETIMEOUT;
+    if((millis() - waiting_since) > READ_START_TIMEOUT_MS) return ETIMEOUT;
   }
 
   delayMicroseconds(CLKHALF);
