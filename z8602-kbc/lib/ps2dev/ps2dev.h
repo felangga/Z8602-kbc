@@ -16,6 +16,13 @@ class PS2dev
 	public:
 		PS2dev(int clk, int data);
 
+		// Lock-LED state last set by the host via EDh. bit0=Scroll, bit1=Num,
+		// bit2=Caps. This is the persistent copy: the unsigned char* handed to
+		// keyboard_handle() is only an out-parameter for one call, so an EDh
+		// that lands inside do_write()'s abort path (while we were transmitting
+		// a keystroke) would otherwise never be reflected anywhere.
+		unsigned char getLeds() { return leds; }
+
 		// Enum containing all of the non-special keycodes/scancodes
 		// (if you can't find the scancode you're looking for here, check the special scancodes)
 		enum ScanCodes
